@@ -813,6 +813,48 @@ public:
 	bool IsDeprecated() override { return false; }
 };
 
+/* ─── Calling Convention ──────────────────────────────────── */
+
+class AfucCallingConvention : public CallingConvention
+{
+public:
+	AfucCallingConvention(Architecture* arch)
+		: CallingConvention(arch, "default")
+	{
+	}
+
+	vector<uint32_t> GetCallerSavedRegisters() override
+	{
+		/* $01-$11 are temporaries (scratch across calls) */
+		return {
+			REG_R01, REG_R02, REG_R03, REG_R04, REG_R05,
+			REG_R06, REG_R07, REG_R08, REG_R09, REG_R0A,
+			REG_R0B,
+		};
+	}
+
+	vector<uint32_t> GetCalleeSavedRegisters() override
+	{
+		/* $12-$19 are globals (preserved across calls by convention) */
+		return {
+			REG_R12, REG_R13, REG_R14, REG_R15, REG_R16,
+			REG_R17, REG_R18, REG_R19,
+		};
+	}
+
+	vector<uint32_t> GetIntegerArgumentRegisters() override
+	{
+		/* AFUC doesn't use register-based argument passing;
+		 * PM4 packet data arrives through the $data FIFO */
+		return {};
+	}
+
+	uint32_t GetIntegerReturnValueRegister() override
+	{
+		return REG_R01;
+	}
+};
+
 /* ─── Plugin Entry Point ──────────────────────────────────── */
 
 extern "C"
@@ -821,9 +863,26 @@ extern "C"
 
 	BINARYNINJAPLUGIN bool CorePluginInit()
 	{
-		Architecture::Register(new AfucArchitecture("afuc-a5xx", AFUC_A5XX));
-		Architecture::Register(new AfucArchitecture("afuc-a6xx", AFUC_A6XX));
-		Architecture::Register(new AfucArchitecture("afuc-a7xx", AFUC_A7XX));
+		auto* a5 = new AfucArchitecture("afuc-a5xx", AFUC_A5XX);
+		auto* a6 = new AfucArchitecture("afuc-a6xx", AFUC_A6XX);
+		auto* a7 = new AfucArchitecture("afuc-a7xx", AFUC_A7XX);
+
+		Architecture::Register(a5);
+		Architecture::Register(a6);
+		Architecture::Register(a7);
+
+		/* Register calling conventions */
+		Ref<CallingConvention> cc5 = new AfucCallingConvention(a5);
+		Ref<CallingConvention> cc6 = new AfucCallingConvention(a6);
+		Ref<CallingConvention> cc7 = new AfucCallingConvention(a7);
+
+		a5->RegisterCallingConvention(cc5);
+		a6->RegisterCallingConvention(cc6);
+		a7->RegisterCallingConvention(cc7);
+
+		a5->SetDefaultCallingConvention(cc5);
+		a6->SetDefaultCallingConvention(cc6);
+		a7->SetDefaultCallingConvention(cc7);
 
 		BinaryViewType::Register(new AfucFirmwareViewType());
 
