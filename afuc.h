@@ -185,3 +185,9 @@ bool afuc_decode(const uint8_t* data, size_t len, uint64_t addr,
 const char* afuc_reg_name(AfucReg reg);
 const char* afuc_src_reg_name(uint32_t enc);
 const char* afuc_dst_reg_name(uint32_t enc);
+
+/* ─── Control / SQE / pipe register name resolution ───────── */
+
+const char* afuc_ctrl_reg_name(AfucGpuVer gpuver, uint32_t offset);
+const char* afuc_sqe_reg_name(uint32_t offset);
+const char* afuc_pipe_reg_name(AfucGpuVer gpuver, uint32_t offset);

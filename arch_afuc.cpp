@@ -374,6 +374,7 @@ public:
 
 		/* ── MOVI (move immediate with shift) ─────────── */
 		case AFUC_MOVI:
+		{
 			result.emplace_back(RegisterToken, afuc_dst_reg_name(insn.dst_enc));
 			result.emplace_back(OperandSeparatorToken, ", ");
 			snprintf(buf, sizeof(buf), "0x%x", insn.immed);
@@ -383,7 +384,20 @@ public:
 				snprintf(buf, sizeof(buf), "%u", insn.shift);
 				result.emplace_back(IntegerToken, buf, insn.shift);
 			}
+			/* Annotate pipe register when writing to $addr with high shift */
+			if (insn.dst_enc == 0x1d && insn.shift >= 16) {
+				uint32_t val = insn.immed << insn.shift;
+				val &= ~0x40000u; /* b18 = auto-increment disable flag */
+				if ((val & 0x00ffffffu) == 0) {
+					const char* pname = afuc_pipe_reg_name(m_gpuver, val >> 24);
+					if (pname) {
+						string ann = string("  ; |") + pname;
+						result.emplace_back(TextToken, ann);
+					}
+				}
+			}
 			break;
+		}
 
 		/* ── SETBIT / CLRBIT ──────────────────────────── */
 		case AFUC_SETBIT:
@@ -413,32 +427,58 @@ public:
 		/* ── CWRITE / SWRITE ──────────────────────────── */
 		case AFUC_CWRITE:
 		case AFUC_SWRITE:
+		{
 			result.emplace_back(RegisterToken, afuc_src_reg_name(insn.src1_enc));
 			result.emplace_back(OperandSeparatorToken, ", ");
 			result.emplace_back(BeginMemoryOperandToken, "[");
 			result.emplace_back(RegisterToken, afuc_src_reg_name(insn.src2_enc));
 			result.emplace_back(TextToken, " + ");
-			snprintf(buf, sizeof(buf), "0x%03x", insn.base);
-			result.emplace_back(IntegerToken, buf, insn.base);
+			const char* rname = nullptr;
+			if (insn.op == AFUC_SWRITE)
+				rname = afuc_sqe_reg_name(insn.base);
+			else
+				rname = afuc_ctrl_reg_name(m_gpuver, insn.base);
+			if (rname) {
+				string sym = (insn.op == AFUC_SWRITE) ? string("%") : string("@");
+				sym += rname;
+				result.emplace_back(TextToken, sym);
+			} else {
+				snprintf(buf, sizeof(buf), "0x%03x", insn.base);
+				result.emplace_back(IntegerToken, buf, insn.base);
+			}
 			result.emplace_back(EndMemoryOperandToken, "]");
 			if (insn.preincrement)
 				result.emplace_back(TextToken, "!");
 			break;
+		}
 
 		/* ── CREAD / SREAD ────────────────────────────── */
 		case AFUC_CREAD:
 		case AFUC_SREAD:
+		{
 			result.emplace_back(RegisterToken, afuc_dst_reg_name(insn.dst_enc));
 			result.emplace_back(OperandSeparatorToken, ", ");
 			result.emplace_back(BeginMemoryOperandToken, "[");
 			result.emplace_back(RegisterToken, afuc_src_reg_name(insn.src1_enc));
 			result.emplace_back(TextToken, " + ");
-			snprintf(buf, sizeof(buf), "0x%03x", insn.base);
-			result.emplace_back(IntegerToken, buf, insn.base);
+			const char* rname = nullptr;
+			if (insn.op == AFUC_SREAD)
+				rname = afuc_sqe_reg_name(insn.base);
+			else
+				rname = afuc_ctrl_reg_name(m_gpuver, insn.base);
+			if (rname) {
+				string sym = (insn.op == AFUC_SREAD) ? string("%") : string("@");
+				sym += rname;
+				result.emplace_back(TextToken, sym);
+			} else {
+				snprintf(buf, sizeof(buf), "0x%03x", insn.base);
+				result.emplace_back(IntegerToken, buf, insn.base);
+			}
 			result.emplace_back(EndMemoryOperandToken, "]");
 			if (insn.preincrement)
 				result.emplace_back(TextToken, "!");
 			break;
+		}
 
 		/* ── STORE ────────────────────────────────────── */
 		case AFUC_STORE:
